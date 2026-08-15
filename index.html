@@ -1,0 +1,1537 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Khazana - Telegram Loot Boxes</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        khazana: {
+                            bg: '#12141A',
+                            card: '#1A1D26',
+                            cardBorder: 'rgba(255, 255, 255, 0.08)',
+                            gold: '#FFC837',
+                            goldDark: '#FF8008',
+                            tgBlue: '#2AABEE',
+                            tgBlueHover: '#229ED9',
+                            common: '#94A3B8',
+                            rare: '#3B82F6',
+                            epic: '#A855F7',
+                            legendary: '#F59E0B'
+                        }
+                    },
+                    boxShadow: {
+                        'gold-glow': '0 0 25px rgba(255, 200, 55, 0.25)',
+                        'blue-glow': '0 0 20px rgba(42, 171, 238, 0.25)',
+                        'epic-glow': '0 0 20px rgba(168, 85, 247, 0.3)',
+                        'legendary-glow': '0 0 30px rgba(245, 158, 11, 0.4)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #12141A;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            color: #F8FAFC;
+        }
+
+        .glass-card {
+            background: rgba(26, 29, 38, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .custom-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* CS:GO Style Horizontal Reel Container */
+        .reel-track {
+            display: flex;
+            will-change: transform;
+            transition-property: transform;
+            transition-timing-function: cubic-bezier(0.15, 0.88, 0.15, 0.98);
+        }
+
+        /* Glow classes per rarity */
+        .rarity-common { border-color: #94A3B8; box-shadow: 0 0 10px rgba(148, 163, 184, 0.2); }
+        .rarity-rare { border-color: #3B82F6; box-shadow: 0 0 15px rgba(59, 130, 246, 0.35); }
+        .rarity-epic { border-color: #A855F7; box-shadow: 0 0 20px rgba(168, 85, 247, 0.45); }
+        .rarity-legendary { border-color: #F59E0B; box-shadow: 0 0 25px rgba(245, 158, 11, 0.6); }
+
+        @keyframes burstRotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .burst-fx {
+            animation: burstRotate 12s linear infinite;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            background-color: #1A1D26;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px 10px;
+            position: absolute;
+            z-index: 10;
+            top: 110%;
+            right: 0;
+            opacity: 0;
+            transition: opacity 0.3s;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            white-space: nowrap;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="font-sans antialiased min-h-screen flex flex-col justify-between overflow-x-hidden selection:bg-khazana-gold selection:text-black">
+
+    <!-- TOP APP BAR -->
+    <header class="sticky top-0 z-40 px-4 py-3 glass-card border-b border-khazana-cardBorder flex items-center justify-between gap-2">
+        <!-- User Strip -->
+        <div class="flex items-center gap-3">
+            <div class="relative">
+                <img id="userAvatar" src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80" alt="User Avatar" class="w-10 h-10 rounded-full border border-khazana-gold/40 object-cover">
+                <span class="absolute -bottom-1 -right-1 text-[9px] bg-gradient-to-r from-khazana-gold to-khazana-goldDark text-black px-1.5 py-0.2 rounded-full font-black tracking-tighter">VIP</span>
+            </div>
+            <div>
+                <h2 id="userName" class="font-bold text-sm tracking-wide text-white leading-tight">User</h2>
+                <span id="userId" class="text-[10px] text-slate-400 font-mono">ID: --</span>
+            </div>
+        </div>
+
+        <!-- Right Side: Balances & Controls -->
+        <div class="flex items-center gap-2">
+            <!-- Ticket Balance Pill -->
+            <div onclick="handleConvertTickets()" class="glass-card px-2.5 py-1.5 rounded-full flex items-center gap-1 border border-khazana-common/30 bg-khazana-common/5 tooltip relative cursor-pointer active:scale-95">
+                <img src="https://i.ibb.co/qYr79X57/file-000000001478821184a7f5e58b7b80de.png" alt="Ticket Icon" class="w-4 h-4 object-contain">
+                <span id="ticketBalance" class="text-xs font-extrabold text-white">0</span>
+                <span class="tooltiptext text-[10px]">Tap to convert · 10 Tickets = 1 Star</span>
+            </div>
+
+            <!-- Stars Balance Pill -->
+            <div class="glass-card px-3 py-1.5 rounded-full flex items-center gap-1.5 border border-khazana-gold/30 bg-khazana-gold/5">
+                <img src="https://i.ibb.co/bMGmC8jk/file-000000003eb082088d42394e36b4e1cd.png" alt="Star Icon" class="w-4 h-4 object-contain">
+                <span id="starsBalance" class="text-sm font-extrabold text-white">0</span>
+                <button onclick="triggerStarsPurchase()" class="ml-1 w-5 h-5 rounded-full bg-khazana-gold hover:bg-amber-400 text-black flex items-center justify-center font-black text-xs transition-transform active:scale-95" title="Buy Stars">
+                    +
+                </button>
+            </div>
+            
+            <!-- Admin Panel Password Prompt Button -->
+            <button onclick="openAdminAuthModal()" class="glass-card p-1.5 rounded-lg text-xs text-slate-400 hover:text-white transition-colors" title="Admin Login">
+                <i class="fa-solid fa-user-shield"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- NOTIFICATION TOAST -->
+    <div id="toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-khazana-card border border-khazana-gold text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-2xl opacity-0 transition-all duration-300 pointer-events-none flex items-center gap-2">
+        <i class="fa-solid fa-circle-info text-khazana-gold"></i>
+        <span id="toastMsg">Notification message</span>
+    </div>
+
+    <!-- MAIN APP CONTENT -->
+    <main id="appContainer" class="flex-1 px-4 py-4 max-w-md mx-auto w-full flex flex-col gap-4 pb-24 custom-scrollbar overflow-y-auto">
+
+        <!-- ==================== 1. HOME TAB ==================== -->
+        <section id="tab-home" class="tab-content flex flex-col gap-4">
+            
+            <!-- Banner / Announcement -->
+            <div class="glass-card p-4 rounded-2xl relative overflow-hidden bg-gradient-to-r from-khazana-card via-slate-900 to-khazana-card border border-khazana-gold/20">
+                <div class="flex items-center justify-between relative z-10">
+                    <div>
+                        <span class="text-[10px] uppercase font-extrabold tracking-widest text-khazana-gold">Fragment Style Drops</span>
+                        <h3 class="text-base font-black text-white mt-0.5">Khazana Loot Vaults</h3>
+                        <p class="text-xs text-slate-400 mt-1 flex items-center gap-1">Open cases with <img src="https://i.ibb.co/bMGmC8jk/file-000000003eb082088d42394e36b4e1cd.png" alt="Star" class="w-3 h-3 inline"> to win gifts!</p>
+                    </div>
+                    <div class="w-14 h-14 relative flex-shrink-0 flex items-center justify-center">
+                        <span class="text-4xl">🏴‍☠️</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loot Box Grid Title -->
+            <div class="flex items-center justify-between">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Select Loot Tier</h4>
+                <span class="text-[10px] text-khazana-gold font-medium">Instant Reveal</span>
+            </div>
+
+            <!-- Loot Box Grid -->
+            <div id="lootBoxGrid" class="grid grid-cols-2 gap-3.5">
+                <!-- Dynamic cards injected via JS API placeholder -->
+            </div>
+        </section>
+
+
+        <!-- ==================== 2. TASKS TAB ==================== -->
+        <section id="tab-tasks" class="tab-content hidden flex flex-col gap-4">
+            <div class="glass-card p-4 rounded-2xl">
+                <h3 class="text-base font-bold text-white">Quests & Reward Tasks</h3>
+                <p class="text-xs text-slate-400 mt-1 flex items-center gap-1">Complete tasks to earn <img src="https://i.ibb.co/qYr79X57/file-000000001478821184a7f5e58b7b80de.png" alt="Ticket" class="w-3 h-3 inline"> Tickets!</p>
+            </div>
+
+            <!-- Task List Container -->
+            <div id="taskList" class="flex flex-col gap-2.5">
+                <!-- Task items injected via JS API placeholder -->
+            </div>
+
+            <!-- Referrals Section -->
+            <div class="glass-card p-4 rounded-2xl mt-2 flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h4 class="text-sm font-bold text-white">Referral Squad</h4>
+                        <p class="text-xs text-slate-400">Invite friends & get rewards!</p>
+                    </div>
+                    <span class="text-2xl">🤝</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 bg-slate-950/60 p-3 rounded-xl border border-white/5">
+                    <div>
+                        <span class="text-[10px] text-slate-400 uppercase font-semibold">Total Invited</span>
+                        <p id="refCount" class="text-base font-extrabold text-white">0</p>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-400 uppercase font-semibold">Earned Stars</span>
+                        <p id="refEarned" class="text-base font-extrabold text-khazana-gold flex items-center gap-1">
+                            <img src="https://i.ibb.co/bMGmC8jk/file-000000003eb082088d42394e36b4e1cd.png" alt="Star" class="w-4 h-4 object-contain"> 0
+                        </p>
+                    </div>
+                </div>
+
+                <div class="flex gap-2 mt-1">
+                    <button onclick="shareInviteLink()" class="flex-1 bg-khazana-tgBlue hover:bg-khazana-tgBlueHover text-white font-bold text-xs py-2.5 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-paper-plane"></i> Invite Friends
+                    </button>
+                    <button onclick="copyInviteLink()" class="glass-card px-3 py-2.5 rounded-xl text-xs font-bold text-slate-200 hover:text-white transition-all active:scale-95">
+                        <i class="fa-solid fa-copy"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ==================== 3. PROFILE TAB ==================== -->
+        <section id="tab-profile" class="tab-content hidden flex flex-col gap-4">
+            <!-- User Hero Card -->
+            <div class="glass-card p-5 rounded-2xl text-center flex flex-col items-center relative overflow-hidden">
+                <img id="profileAvatar" src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80" alt="User Avatar" class="w-20 h-20 rounded-full border-2 border-khazana-gold shadow-gold-glow mb-2 object-cover">
+                <h3 id="profileName" class="text-base font-extrabold text-white">Telegram User</h3>
+                <p id="profileTelegramId" class="text-xs text-slate-400 font-mono">ID: --</p>
+
+                <div class="mt-4 w-full grid grid-cols-2 gap-2 text-center bg-slate-950/50 p-3 rounded-xl border border-white/5">
+                    <div>
+                        <span class="text-[10px] text-slate-400 uppercase font-semibold">Cases Opened</span>
+                        <p id="statsOpened" class="text-sm font-black text-white">0</p>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-400 uppercase font-semibold">Best Loot</span>
+                        <p id="statsBestLoot" class="text-sm font-black text-khazana-gold">--</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Segmented Control Switcher -->
+            <div class="glass-card p-1 rounded-xl grid grid-cols-2 gap-1 text-center text-xs font-bold">
+                <button onclick="switchProfileSegment('history')" id="seg-history" class="seg-btn py-2 rounded-lg bg-khazana-card text-white">Opening History</button>
+                <button onclick="switchProfileSegment('leaderboard')" id="seg-leaderboard" class="seg-btn py-2 rounded-lg text-slate-400 hover:text-white">Leaderboard</button>
+            </div>
+
+            <!-- History -->
+            <div id="subtab-history" class="flex flex-col gap-2">
+                <div id="historyList" class="flex flex-col gap-2">
+                    <!-- History injected via JS -->
+                </div>
+            </div>
+
+            <!-- Leaderboard -->
+            <div id="subtab-leaderboard" class="hidden flex flex-col gap-2">
+                <div id="leaderboardList" class="flex flex-col gap-2">
+                    <!-- Leaderboard injected via JS -->
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+
+    <!-- ==================== 4. CASE-OPENING SCREEN MODAL ==================== -->
+    <div id="caseOpeningModal" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex flex-col justify-between opacity-0 pointer-events-none transition-opacity duration-300">
+        
+        <!-- Top Bar -->
+        <div class="px-4 py-4 flex items-center justify-between border-b border-white/10">
+            <div>
+                <span id="modalTierTitle" class="text-xs font-bold uppercase tracking-wider text-khazana-gold">Tier Case</span>
+                <h3 class="text-base font-extrabold text-white">Case Opening</h3>
+            </div>
+            <button onclick="closeCaseModal()" class="w-8 h-8 rounded-full bg-white/10 text-slate-300 hover:text-white flex items-center justify-center font-bold">
+                ✕
+            </button>
+        </div>
+
+        <!-- Center Reel Viewport -->
+        <div class="flex-1 flex flex-col justify-center items-center px-2 relative overflow-hidden">
+            
+            <!-- Guaranteed Spin Badge -->
+            <div class="mb-6 flex flex-col items-center relative z-30">
+                <button id="guaranteedSpinBtn" onclick="triggerGuaranteedSpin()" class="glass-card px-4 py-2 rounded-full border border-khazana-gold text-xs font-black text-khazana-gold flex items-center gap-2 shadow-gold-glow active:scale-95 transition-transform">
+                    <i class="fa-solid fa-crown text-amber-400"></i>
+                    <span id="guaranteedBtnText">Guaranteed Spin Ready!</span>
+                </button>
+                <span id="guaranteedTimerText" class="text-[10px] text-slate-400 mt-1 font-mono hidden">Cooldown: 23:59:59</span>
+            </div>
+
+            <!-- Reel Outer Frame with Pointer Needle -->
+            <div class="w-full max-w-sm relative py-3 bg-slate-950/80 rounded-2xl border border-khazana-cardBorder shadow-2xl">
+                
+                <!-- Fixed Needles -->
+                <div class="absolute -top-3 left-1/2 -translate-x-1/2 z-30 w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-t-[14px] border-t-khazana-gold drop-shadow-[0_2px_8px_rgba(255,200,55,0.8)]"></div>
+                <div class="absolute -bottom-3 left-1/2 -translate-x-1/2 z-30 w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-b-[14px] border-b-khazana-gold drop-shadow-[0_-2px_8px_rgba(255,200,55,0.8)]"></div>
+
+                <div class="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[90px] border-x-2 border-khazana-gold/50 bg-khazana-gold/5 z-20 pointer-events-none"></div>
+
+                <!-- Reel Track viewport -->
+                <div class="w-full overflow-hidden relative" id="reelViewport">
+                    <div id="reelTrack" class="reel-track items-center py-2">
+                        <!-- Gift strip generated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <p class="text-xs text-slate-400 mt-6 text-center">Tap 'OPEN CASE' to spin the vault.</p>
+        </div>
+
+        <!-- Bottom Action Bar -->
+        <div class="p-4 border-t border-white/10 glass-card flex flex-col gap-2">
+            <button id="openCaseActionBtn" onclick="executeCaseSpin()" class="w-full bg-gradient-to-r from-khazana-gold to-khazana-goldDark hover:opacity-95 text-black font-black text-sm py-3.5 rounded-xl shadow-gold-glow transition-all active:scale-98 flex items-center justify-center gap-2">
+                <span>OPEN CASE</span>
+                <span id="modalCaseCostPill" class="bg-black/20 px-2 py-0.5 rounded-full text-xs flex items-center gap-1">
+                    <img src="https://i.ibb.co/bMGmC8jk/file-000000003eb082088d42394e36b4e1cd.png" alt="Star" class="w-3.5 h-3.5 object-contain">
+                    <span id="modalCaseCostText">--</span>
+                </span>
+            </button>
+        </div>
+    </div>
+
+
+    <!-- WINNER REVEAL POPUP MODAL -->
+    <div id="winRevealModal" class="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-6 opacity-0 pointer-events-none transition-all duration-300">
+        <div class="absolute w-96 h-96 rounded-full bg-gradient-to-tr from-khazana-gold/20 via-khazana-epic/20 to-transparent blur-3xl burst-fx pointer-events-none"></div>
+
+        <div class="relative z-10 text-center flex flex-col items-center max-w-xs">
+            <span class="text-xs font-black uppercase tracking-widest text-khazana-gold mb-1">YOU WON!</span>
+            <h2 id="winItemName" class="text-xl font-black text-white px-2">Item Name</h2>
+            <span id="winItemRarity" class="text-xs font-bold text-khazana-gold uppercase tracking-wider mb-6">Rarity</span>
+
+            <div id="winItemBox" class="w-36 h-36 rounded-2xl glass-card flex items-center justify-center border-2 border-khazana-gold shadow-legendary-glow mb-6 p-4">
+                <img id="winItemImg" src="https://via.placeholder.com/150/F59E0B/FFFFFF?text=GIFT" alt="Won Item" class="w-full h-full object-contain">
+            </div>
+
+            <p id="winItemValue" class="text-xs text-slate-300 mb-6 flex items-center gap-1 justify-center">
+                Valued at approx <img src="https://i.ibb.co/bMGmC8jk/file-000000003eb082088d42394e36b4e1cd.png" alt="Star" class="w-3.5 h-3.5 inline object-contain"> <span id="winItemValueStars">--</span> Stars
+            </p>
+
+            <button onclick="closeWinReveal()" class="w-full bg-khazana-tgBlue hover:bg-khazana-tgBlueHover text-white font-extrabold text-xs py-3 rounded-xl shadow-blue-glow transition-all active:scale-95">
+                COLLECT GIFT
+            </button>
+        </div>
+    </div>
+
+
+    <!-- ==================== 5. ADMIN AUTHENTICATION MODAL ==================== -->
+    <div id="adminAuthModal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="glass-card p-6 rounded-2xl border border-khazana-gold/40 w-full max-w-xs flex flex-col gap-4 text-center">
+            <div class="w-12 h-12 rounded-full bg-khazana-gold/20 text-khazana-gold flex items-center justify-center mx-auto text-xl">
+                <i class="fa-solid fa-lock"></i>
+            </div>
+            <div>
+                <h3 class="text-base font-extrabold text-white">Admin Authentication</h3>
+                <p class="text-xs text-slate-400 mt-1">Enter admin password</p>
+            </div>
+
+            <form onsubmit="handleAdminAuthSubmit(event)" class="flex flex-col gap-3">
+                <input id="adminPassInput" type="password" placeholder="Enter Password..." required class="bg-slate-950 border border-slate-800 text-sm text-center text-white p-2.5 rounded-xl outline-none focus:border-khazana-gold font-mono">
+                <div class="flex gap-2">
+                    <button type="button" onclick="closeAdminAuthModal()" class="flex-1 glass-card py-2 rounded-xl text-xs font-bold text-slate-400 active:scale-95">Cancel</button>
+                    <button type="submit" class="flex-1 bg-khazana-gold hover:bg-amber-400 text-black font-extrabold py-2 rounded-xl text-xs active:scale-95">Login</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- ==================== 6. FULL CONTROL ADMIN PANEL DASHBOARD ==================== -->
+    <div id="adminPanelModal" class="fixed inset-0 z-50 bg-slate-950 text-slate-200 flex flex-col hidden overflow-y-auto custom-scrollbar">
+        <!-- Admin Header -->
+        <div class="px-4 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between sticky top-0 z-20 gap-2">
+            <div class="flex items-center gap-2">
+                <span class="bg-red-500/20 text-red-400 text-[10px] font-black px-2 py-0.5 rounded border border-red-500/30">ADMIN FULL CONTROL</span>
+                <h3 class="text-xs font-bold text-white leading-tight">Khazana Master Control</h3>
+            </div>
+            <button onclick="exitAdminPanel()" class="flex-shrink-0 text-slate-400 hover:text-white text-xs font-bold px-2 py-1 bg-slate-800 rounded active:scale-95">
+                Exit Admin
+            </button>
+        </div>
+
+        <div class="p-4 flex flex-col gap-6 max-w-2xl mx-auto w-full">
+            
+            <!-- System Stats -->
+            <section>
+                <h4 class="text-xs font-bold uppercase text-slate-400 mb-2">Analytics Overview</h4>
+                <div id="adminAnalyticsGrid" class="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                    <!-- Stat cards injected via JS -->
+                </div>
+            </section>
+
+            <!-- 1. GIFTS CONTROLLER -->
+            <section class="bg-slate-900 p-3.5 rounded-xl border border-slate-800 flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-bold uppercase text-slate-300">Gifts & Items Controller</h4>
+                    <span class="text-[10px] text-emerald-400">Database Control</span>
+                </div>
+                <form onsubmit="handleAdminSaveGift(event)" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input id="adminGiftName" type="text" placeholder="Gift Name (e.g. Neon Plane)" required class="bg-slate-950 border border-slate-800 text-xs text-white p-2 rounded outline-none focus:border-khazana-tgBlue">
+                    <input id="adminGiftStars" type="number" placeholder="Value in ⭐ Stars" required class="bg-slate-950 border border-slate-800 text-xs text-white p-2 rounded outline-none focus:border-khazana-tgBlue">
+                    <select id="adminGiftRarity" class="bg-slate-950 border border-slate-800 text-xs text-white p-2 rounded outline-none focus:border-khazana-tgBlue">
+                        <option value="common">Common (Silver Glow)</option>
+                        <option value="rare">Rare (Blue Glow)</option>
+                        <option value="epic">Epic (Purple Glow)</option>
+                        <option value="legendary">Legendary (Gold Glow)</option>
+                    </select>
+                    <input id="adminGiftImgUrl" type="url" placeholder="Provided Gift Direct PNG Link" required class="bg-slate-950 border border-slate-800 text-xs text-white p-2 rounded outline-none focus:border-khazana-tgBlue">
+                    <button type="submit" class="sm:col-span-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs p-2.5 rounded transition-all active:scale-95">
+                        Add Gift Item
+                    </button>
+                </form>
+
+                <!-- GIFTS LIBRARY LIST (was missing — this is where saved gifts actually show up) -->
+                <div class="border-t border-slate-800 pt-3 mt-1">
+                    <h5 class="text-[10px] font-bold uppercase text-slate-500 mb-2">All Saved Gifts</h5>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse min-w-[380px]">
+                            <thead>
+                                <tr class="border-b border-slate-800 text-slate-400">
+                                    <th class="p-2">Preview</th>
+                                    <th class="p-2">Name</th>
+                                    <th class="p-2">Value</th>
+                                    <th class="p-2">Rarity</th>
+                                    <th class="p-2">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminGiftsTableBody">
+                                <!-- Gift rows injected via JS: renderAdminGiftsTable() -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. LOOT BOX TIER CONTROLLER -->
+            <section class="bg-slate-900 p-3.5 rounded-xl border border-slate-800 flex flex-col gap-3">
+                <div class="flex items-center justify-between mb-1">
+                    <h4 class="text-xs font-bold uppercase text-slate-300">Loot Box Tiers Manager</h4>
+                    <button onclick="handleAdminAddTier()" class="text-[10px] bg-khazana-tgBlue text-white font-bold px-2 py-1 rounded active:scale-95">+ Add Tier</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse min-w-[300px]">
+                        <thead>
+                            <tr class="border-b border-slate-800 text-slate-400">
+                                <th class="p-2">Tier</th>
+                                <th class="p-2">Cost</th>
+                                <th class="p-2">Image Link</th>
+                                <th class="p-2">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminTierTableBody">
+                            <!-- Tier rows injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- ODDS / OUTCOME TABLE PER TIER (was completely missing) -->
+                <div class="border-t border-slate-800 pt-3 mt-1">
+                    <h5 class="text-[10px] font-bold uppercase text-slate-500 mb-2">Outcome Odds — pick a tier to edit</h5>
+                    <select id="oddsTierSelect" onchange="renderOddsEditor(this.value)" class="w-full bg-slate-950 border border-slate-800 text-xs text-white p-2 rounded outline-none mb-2">
+                        <!-- options injected via JS -->
+                    </select>
+
+                    <div id="oddsEditorBody" class="flex flex-col gap-1.5">
+                        <!-- outcome rows injected via JS: renderOddsEditor() -->
+                    </div>
+
+                    <div class="flex items-center justify-between mt-2 text-[11px]">
+                        <span id="oddsTotalLabel" class="font-bold text-slate-400">Total: 0%</span>
+                        <button onclick="handleAddOddsRow()" class="bg-slate-800 text-white font-bold px-2 py-1 rounded text-[10px] active:scale-95">+ Add Outcome</button>
+                    </div>
+
+                    <button onclick="handleSaveOdds()" class="w-full mt-2 bg-khazana-gold text-black font-bold text-xs p-2 rounded active:scale-95">
+                        Save Odds Table
+                    </button>
+
+                    <!-- Guaranteed spin config for the selected tier -->
+                    <div class="mt-3 pt-3 border-t border-slate-800">
+                        <h5 class="text-[10px] font-bold uppercase text-slate-500 mb-2">Guaranteed Spin Config</h5>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="text-[10px] text-slate-500">Eligible gifts (comma-separated gift names)</label>
+                                <input id="guaranteedEligibleInput" type="text" placeholder="e.g. Heart Bouquet, Teddy Bear" class="w-full bg-slate-950 border border-slate-800 text-xs text-white p-2 rounded outline-none mt-1">
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-slate-500">Cooldown (hours)</label>
+                                <input id="guaranteedCooldownInput" type="number" value="24" class="w-full bg-slate-950 border border-slate-800 text-xs text-white p-2 rounded outline-none mt-1">
+                            </div>
+                        </div>
+                        <p class="text-[10px] text-slate-500 mt-1">Spin price is auto-calculated as the highest-value eligible gift — this is computed by the backend, not set here.</p>
+                        <button onclick="handleSaveGuaranteedConfig()" class="w-full mt-2 bg-slate-800 text-white font-bold text-xs p-2 rounded active:scale-95">
+                            Save Guaranteed Config
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. TASK & QUEST CONTROLLER WITH LINKS -->
+            <section class="bg-slate-900 p-3.5 rounded-xl border border-slate-800 flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-bold uppercase text-slate-300">Tasks Management</h4>
+                    <span class="text-[10px] text-slate-500">Links Supported</span>
+                </div>
+                <form onsubmit="handleAdminSaveTask(event)" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input id="adminTaskTitle" type="text" placeholder="Task Title" required class="bg-slate-950 border border-slate-800 text-xs text-white p-2 rounded outline-none focus:border-khazana-tgBlue">
+                    <input id="adminTaskReward" type="number" placeholder="Reward Tickets" required class="bg-slate-950 border border-slate-800 text-xs text-white p-2 rounded outline-none focus:border-khazana-tgBlue">
+                    <input id="adminTaskUrl" type="url" placeholder="Telegram Link (https://t.me/...)" required class="sm:col-span-2 bg-slate-950 border border-slate-800 text-xs text-white p-2 rounded outline-none focus:border-khazana-tgBlue">
+                    <button type="submit" class="sm:col-span-2 bg-khazana-tgBlue hover:bg-blue-600 text-white font-bold text-xs p-2.5 rounded transition-all active:scale-95">
+                        Save Task
+                    </button>
+                </form>
+            </section>
+
+            <!-- 4. USER MODERATION & BALANCE CONTROLLER -->
+            <section class="bg-slate-900 p-3.5 rounded-xl border border-slate-800 flex flex-col gap-3">
+                <h4 class="text-xs font-bold uppercase text-slate-300">User & Balance Modifier</h4>
+                <div class="flex gap-2">
+                    <input id="adminUserSearchInput" type="text" placeholder="Search Telegram User ID..." class="flex-1 bg-slate-950 border border-slate-800 text-xs text-white p-2 rounded outline-none">
+                    <button onclick="handleAdminSearchUser()" class="bg-slate-800 text-white font-bold text-xs px-3 py-2 rounded hover:bg-slate-700 active:scale-95">Search</button>
+                </div>
+                <div id="adminUserSearchResult" class="text-xs text-slate-400 p-2.5 bg-slate-950 rounded hidden border border-slate-800">
+                    <!-- Results injected here -->
+                </div>
+            </section>
+
+        </div>
+    </div>
+
+
+    <!-- BOTTOM NAVIGATION BAR -->
+    <nav class="fixed bottom-0 left-0 right-0 z-40 glass-card border-t border-khazana-cardBorder bg-khazana-bg/95 backdrop-blur-md max-w-md mx-auto">
+        <div class="grid grid-cols-3 px-2 py-2">
+            
+            <button onclick="switchTab('tab-home')" id="nav-tab-home" class="nav-btn active flex flex-col items-center gap-1 py-1 text-khazana-gold transition-colors active:scale-95">
+                <i class="fa-solid fa-box-open text-lg"></i>
+                <span class="text-[10px] font-bold">Loot Cases</span>
+            </button>
+
+            <button onclick="switchTab('tab-tasks')" id="nav-tab-tasks" class="nav-btn flex flex-col items-center gap-1 py-1 text-slate-400 hover:text-white transition-colors active:scale-95">
+                <i class="fa-solid fa-list-check text-lg"></i>
+                <span class="text-[10px] font-bold">Quests</span>
+            </button>
+
+            <button onclick="switchTab('tab-profile')" id="nav-tab-profile" class="nav-btn flex flex-col items-center gap-1 py-1 text-slate-400 hover:text-white transition-colors active:scale-95">
+                <i class="fa-solid fa-user text-lg"></i>
+                <span class="text-[10px] font-bold">Profile</span>
+            </button>
+
+        </div>
+    </nav>
+
+
+    <!-- Javascript Engine & Decoupled API Bridge -->
+    <script>
+        /* ========================================================================
+         === LIVE BACKEND CONNECTION ===
+         Set this to your deployed backend URL (Railway/Render) before hosting.
+         Leave empty to run in local demo mode with zeroed placeholder data.
+         ========================================================================
+        */
+        const API_BASE = "https://khazana-backend-18q3.onrender.com";
+
+        // Your uploaded loot box images (direct ImgBB links — page links like
+        // ibb.co/xxxxx don't work in <img src>, only i.ibb.co/... direct URLs do).
+        // Used whenever the backend hasn't set a tier's img_url yet, so boxes
+        // never render blank.
+        const TIER_IMAGE_FALLBACKS = {
+            tier_1:  "https://i.ibb.co/WWGPX9P5/file-00000000ae508211975c965e852bd21a.png",
+            tier_3:  "https://i.ibb.co/TDXyPx7q/file-0000000022088211bf62b04a6f621ffd.png",
+            tier_5:  "https://i.ibb.co/VcYBWBnb/file-00000000b66882119a763786651004d1.png",
+            tier_10: "https://i.ibb.co/394GYSpt/file-00000000a3648208a4bc9beaed8ed616.png",
+            tier_25: "https://i.ibb.co/JWXfB7Mf/file-00000000ee9482089d193214f66680b3.png"
+        };
+
+        let adminToken = null;
+        let cachedState = null; // populated by fetchFullState(), reused by the api* functions below
+
+        async function apiCall(path, opts = {}) {
+            if (!API_BASE) return null;
+            try {
+                const res = await fetch(API_BASE + path, {
+                    headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+                    ...opts
+                });
+                const data = await res.json().catch(() => null);
+                if (!res.ok) return { __error: true, status: res.status, ...(data || {}) };
+                return data;
+            } catch (e) {
+                console.warn("Backend unreachable:", e);
+                return null;
+            }
+        }
+
+        async function fetchFullState() {
+            const uid = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0;
+            const initData = window.Telegram?.WebApp?.initData || "";
+            const data = await apiCall(`/api/state?user_id=${uid}&init_data=${encodeURIComponent(initData)}`);
+            // Guard: a failed request (e.g. 401 identity check, backend down) comes
+            // back as {__error:true,...} which is truthy — without this check the
+            // code below would try to read .user off an error object and crash,
+            // which is what was breaking the whole page load.
+            cachedState = (data && !data.__error) ? data : null;
+            if (data && data.__error) {
+                console.warn("Backend rejected /api/state:", data);
+            }
+            return cachedState;
+        }
+
+        // 1. Fetch User Profile, Balance & State
+        async function apiGetUserState() {
+            if (!cachedState) await fetchFullState();
+            if (cachedState) {
+                const u = cachedState.user;
+                return {
+                    userName: u.userName,
+                    userId: u.userId,
+                    userAvatar: window.Telegram?.WebApp?.initDataUnsafe?.user?.photo_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80",
+                    starsBalance: u.starsBalance,
+                    ticketsBalance: u.ticketsBalance,
+                    casesOpened: u.casesOpened,
+                    bestLoot: u.bestLoot,
+                    refCount: u.refCount,
+                    refEarned: u.refEarned,
+                    guaranteedCooldowns: u.guaranteedCooldowns || {},  // per-tier now, not a single number
+                    guaranteedPrices: u.guaranteedPrices || {}
+                };
+            }
+            // demo fallback (no backend configured, or backend rejected the request)
+            return {
+                userName: window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name || "User",
+                userId: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 000000000,
+                userAvatar: window.Telegram?.WebApp?.initDataUnsafe?.user?.photo_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80",
+                starsBalance: 0, ticketsBalance: 0, casesOpened: 0, bestLoot: "--",
+                refCount: 0, refEarned: 0, guaranteedCooldowns: {}, guaranteedPrices: {}
+            };
+        }
+
+        // 2. Fetch Loot Tiers List
+        async function apiGetLootTiers() {
+            if (!cachedState) await fetchFullState();
+            if (cachedState) {
+                return cachedState.tiers.map(t => ({
+                    id: t.id, name: t.name, cost: t.cost,
+                    color: 'from-slate-800 to-slate-950',
+                    imgUrl: t.img_url || TIER_IMAGE_FALLBACKS[t.id] || ''
+                }));
+            }
+            return [
+                { id: 'tier_1', name: '1⭐ Cache', cost: 1, color: 'from-slate-800 to-slate-950', imgUrl: TIER_IMAGE_FALLBACKS['tier_1'] },
+                { id: 'tier_3', name: '3⭐ Coffer', cost: 3, color: 'from-blue-900/60 to-slate-950', imgUrl: TIER_IMAGE_FALLBACKS['tier_3'] },
+                { id: 'tier_5', name: '5⭐ Vault', cost: 5, color: 'from-amber-800/60 to-slate-950', imgUrl: TIER_IMAGE_FALLBACKS['tier_5'] },
+                { id: 'tier_10', name: '10⭐ Chest', cost: 10, color: 'from-purple-900/60 to-slate-950', imgUrl: TIER_IMAGE_FALLBACKS['tier_10'] },
+                { id: 'tier_25', name: '25⭐ Treasury', cost: 25, color: 'from-yellow-700/60 to-slate-950', imgUrl: TIER_IMAGE_FALLBACKS['tier_25'] }
+            ];
+        }
+
+        // 3. CORE: Trigger Case Opening — real Stars payment, then backend resolves the RNG.
+        // This is the important part: nothing here decides the outcome. It pays via
+        // Telegram, then asks the backend (which just got paid) what was won.
+        async function apiFetchCaseResult(tierId, isGuaranteed = false) {
+            if (!API_BASE) {
+                // DEMO MODE — no backend connected yet. Simulates a spin locally
+                // so you can see the box-opening animation while testing.
+                // The moment you set API_BASE above, this branch is skipped
+                // entirely and real Stars payment + backend RNG take over.
+                await new Promise(res => setTimeout(res, 300));
+                const demoTicketPool = [
+                    { id: 'ticket', name: '1 Tickets', rarity: 'common', valueStars: 0, img: 'images/ticket.png' },
+                    { id: 'ticket', name: '3 Tickets', rarity: 'common', valueStars: 0, img: 'images/ticket.png' },
+                    { id: 'demo_gift', name: 'Demo Gift (connect backend for real gifts)', rarity: 'rare', valueStars: 15, img: 'https://i.ibb.co/WWGPX9P5/file-00000000ae508211975c965e852bd21a.png' }
+                ];
+                // Guaranteed spin must NEVER return a ticket — only real gifts,
+                // matching the backend's actual guaranteed_spin logic.
+                const demoGuaranteedPool = [
+                    { id: 'demo_gift_1', name: 'Demo Gift A', rarity: 'epic', valueStars: 15, img: 'https://i.ibb.co/WWGPX9P5/file-00000000ae508211975c965e852bd21a.png' },
+                    { id: 'demo_gift_2', name: 'Demo Gift B', rarity: 'legendary', valueStars: 25, img: 'https://i.ibb.co/TDXyPx7q/file-0000000022088211bf62b04a6f621ffd.png' }
+                ];
+                const pool = isGuaranteed ? demoGuaranteedPool : demoTicketPool;
+                const winningItem = pool[Math.floor(Math.random() * pool.length)];
+                showToast(isGuaranteed ? "Demo guaranteed spin — connect API_BASE for real gifts" : "Demo spin — connect API_BASE for real spins");
+                return { winningItem, updatedStarsBalance: currentUserState.starsBalance, cooldownRemainingSec: isGuaranteed ? 86400 : 0 };
+            }
+
+            // Guard: openInvoice only exists when actually running inside the
+            // Telegram app (opened via the bot's Mini App button). Testing this
+            // page directly in a regular browser will reach here and silently
+            // do nothing without this check.
+            if (typeof window.Telegram?.WebApp?.openInvoice !== "function") {
+                showToast("Open this inside Telegram (via the bot) to test real payments.");
+                throw new Error("not running inside Telegram WebApp");
+            }
+
+            const kind = isGuaranteed ? "guaranteed_spin" : "regular_spin";
+            const invoiceRes = await apiCall("/api/create_spin_invoice", {
+                method: "POST",
+                body: JSON.stringify({ user_id: currentUserState.userId, tier_id: tierId, kind })
+            });
+            if (!invoiceRes || invoiceRes.__error) {
+                throw new Error(invoiceRes?.error || "could not create invoice");
+            }
+
+            // Open Telegram's native Stars payment sheet and wait for the result
+            const paid = await new Promise((resolve) => {
+                window.Telegram.WebApp.openInvoice(invoiceRes.invoice_link, (status) => {
+                    resolve(status === "paid");
+                });
+            });
+            if (!paid) throw new Error("payment cancelled");
+
+            // Payment confirmed by Telegram -> webhook credits Stars server-side ->
+            // now ask the backend to actually resolve the spin (RNG + sendGift).
+            const spinPath = isGuaranteed ? "/api/guaranteed_spin" : "/api/spin";
+            const result = await apiCall(spinPath, {
+                method: "POST",
+                body: JSON.stringify({ user_id: currentUserState.userId, tier_id: tierId })
+            });
+            if (!result || result.__error) {
+                throw new Error(result?.error || "spin failed");
+            }
+
+            return {
+                winningItem: result.winningItem,
+                updatedStarsBalance: result.updatedStarsBalance,
+                cooldownRemainingSec: result.cooldownRemainingSec || 0
+            };
+        }
+
+        // 4. Tasks
+        async function apiGetTasks() {
+            if (!cachedState) await fetchFullState();
+            return cachedState ? cachedState.tasks : [];
+        }
+        async function handleTaskActionReal(taskId) {
+            const res = await apiCall("/api/complete_task", {
+                method: "POST",
+                body: JSON.stringify({ user_id: currentUserState.userId, task_id: taskId })
+            });
+            if (res && res.success) {
+                document.getElementById('starsBalance').innerText = res.updatedStarsBalance;
+                document.getElementById('ticketBalance').innerText = res.updatedTicketsBalance;
+            }
+            return res;
+        }
+
+        // 5. Convert Tickets to Stars
+        async function apiConvertTicketsToStars() {
+            const res = await apiCall("/api/convert_tickets", {
+                method: "POST",
+                body: JSON.stringify({ user_id: currentUserState.userId })
+            });
+            if (!res) {
+                return { success: false, updatedStarsBalance: currentUserState.starsBalance,
+                          updatedTicketsBalance: currentUserState.ticketsBalance, message: "No backend connected." };
+            }
+            return res;
+        }
+
+        // 6. History & Leaderboard
+        async function apiGetHistory() {
+            if (!cachedState) await fetchFullState();
+            return cachedState ? cachedState.history : [];
+        }
+        async function apiGetLeaderboard() {
+            if (!cachedState) await fetchFullState();
+            return cachedState ? cachedState.leaderboard : [];
+        }
+
+        /* ---------- ADMIN API BRIDGES (all require adminToken, set by apiAdminVerifyPass) ---------- */
+        async function adminCall(path, opts = {}) {
+            return apiCall(path, { ...opts, headers: { "X-Admin-Token": adminToken || "", ...(opts.headers || {}) } });
+        }
+
+        async function apiAdminGetAnalytics() {
+            const res = await adminCall("/api/admin/analytics");
+            return res && !res.__error ? res : { totalOpened: 0, totalStarsSpent: 0, activeUsers: 0, totalGiftsAwarded: 0 };
+        }
+        async function apiAdminVerifyPass(pass) {
+            const res = await apiCall("/api/admin/login", { method: "POST", body: JSON.stringify({ password: pass }) });
+            if (res && res.success) {
+                adminToken = res.token;
+                return true;
+            }
+            return false;
+        }
+        async function apiAdminSaveTask(taskData) {
+            const res = await adminCall("/api/admin/tasks", { method: "POST", body: JSON.stringify(taskData) });
+            return res && !res.__error ? res : { success: false };
+        }
+        async function apiAdminSaveGift(giftData) {
+            const res = await adminCall("/api/admin/gifts", { method: "POST", body: JSON.stringify(giftData) });
+            return res && !res.__error ? res : { success: false };
+        }
+        async function apiAdminGetGifts() {
+            const res = await adminCall("/api/admin/gifts");
+            return Array.isArray(res) ? res : [];
+        }
+        async function apiAdminDeleteGift(giftId) {
+            const res = await adminCall(`/api/admin/gifts/${giftId}`, { method: "DELETE" });
+            return res && !res.__error ? res : { success: false };
+        }
+        async function apiAdminGetTierOdds(tierId) {
+            const res = await adminCall(`/api/admin/odds/${tierId}`);
+            return Array.isArray(res) ? res : [];
+        }
+        async function apiAdminUpdateTierOdds(tierId, outcomesArray) {
+            const res = await adminCall(`/api/admin/odds/${tierId}`, { method: "POST", body: JSON.stringify(outcomesArray) });
+            if (res && res.__error) { showToast(res.error || "Save failed"); return { success: false }; }
+            return res || { success: false };
+        }
+        async function apiAdminSaveGuaranteedConfig(tierId, config) {
+            const res = await adminCall(`/api/admin/guaranteed/${tierId}`, { method: "POST", body: JSON.stringify(config) });
+            return res && !res.__error ? res : { success: false };
+        }
+        async function apiAdminCreateTier(data) {
+            const res = await adminCall("/api/admin/tiers", { method: "POST", body: JSON.stringify(data) });
+            return res && !res.__error ? res : { success: false };
+        }
+        async function apiAdminDeleteTier(tierId) {
+            const res = await adminCall(`/api/admin/tiers/${tierId}`, { method: "DELETE" });
+            return res && !res.__error ? res : { success: false };
+        }
+        async function apiConvertTicketsToStarsUI() {
+            return apiConvertTicketsToStars();
+        }
+        async function apiAdminUpdateTierConfig(tierId, config) {
+            return apiAdminCreateTier({ id: tierId, ...config });
+        }
+        async function apiAdminSearchUser(query) {
+            const res = await adminCall(`/api/admin/users/search?q=${encodeURIComponent(query)}`);
+            return res && !res.__error ? res : { userId: query, username: 'Not found', status: '--', totalBalance: 0, totalTickets: 0 };
+        }
+        async function apiAdminBanUser(userId, banned) {
+            return adminCall(`/api/admin/users/${userId}/ban`, { method: "POST", body: JSON.stringify({ banned }) });
+        }
+        async function apiAdminAdjustBalance(userId, amount) {
+            return adminCall(`/api/admin/users/${userId}/adjust_balance`, { method: "POST", body: JSON.stringify({ amount }) });
+        }
+
+
+        /* ========================================================================
+         === APP STATE & UI RENDERERS ===
+         ========================================================================
+        */
+
+        let currentUserState = {};
+        let activeSelectedTier = null;
+        let isSpinning = false;
+        let currentLang = 'EN';
+        let guaranteedCooldownInterval;
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            if (window.Telegram?.WebApp) {
+                window.Telegram.WebApp.ready();
+                window.Telegram.WebApp.expand();
+            }
+
+            await loadUserData();
+            await renderLootBoxes();
+            await renderTasks();
+            await renderProfileData();
+        });
+
+        async function loadUserData() {
+            currentUserState = await apiGetUserState();
+            
+            document.getElementById('userName').innerText = currentUserState.userName;
+            document.getElementById('userId').innerText = `ID: ${currentUserState.userId}`;
+            document.getElementById('userAvatar').src = currentUserState.userAvatar;
+            document.getElementById('starsBalance').innerText = currentUserState.starsBalance;
+            document.getElementById('ticketBalance').innerText = currentUserState.ticketsBalance;
+
+            document.getElementById('profileName').innerText = currentUserState.userName;
+            document.getElementById('profileTelegramId').innerText = `ID: ${currentUserState.userId}`;
+            document.getElementById('profileAvatar').src = currentUserState.userAvatar;
+            document.getElementById('statsOpened').innerText = currentUserState.casesOpened;
+            document.getElementById('statsBestLoot').innerText = currentUserState.bestLoot;
+            document.getElementById('refCount').innerText = currentUserState.refCount;
+            document.getElementById('refEarned').innerText = `0`;
+        }
+
+        async function renderLootBoxes() {
+            const tiers = await apiGetLootTiers();
+            const grid = document.getElementById('lootBoxGrid');
+            grid.innerHTML = '';
+
+            tiers.forEach(tier => {
+                const card = document.createElement('div');
+                card.className = `glass-card p-4 rounded-2xl flex flex-col items-center justify-between border border-khazana-cardBorder hover:border-khazana-gold/40 transition-all cursor-pointer active:scale-95 group bg-gradient-to-b ${tier.color}`;
+                card.onclick = () => openCaseModal(tier);
+
+                // If no real image URL is set yet (imgUrl empty), don't even try
+                // loading it — an empty src doesn't reliably fire onerror in
+                // every browser, which is why boxes were showing up blank
+                // instead of falling back to the placeholder icon. Resolve the
+                // fallback up front instead.
+                const imgSrc = tier.imgUrl && tier.imgUrl.trim() ? tier.imgUrl : getFallbackBoxSvg(tier.cost);
+
+                card.innerHTML = `
+                    <div class="w-28 h-28 my-1 flex items-center justify-center relative flex-shrink-0">
+                        <img src="${imgSrc}" alt="${tier.name}" data-fallback-cost="${tier.cost}" class="w-full h-full object-contain drop-shadow-xl group-hover:scale-105 transition-transform" onerror="handleImgError(this)">
+                    </div>
+                    <div class="text-center w-full mt-1">
+                        <h5 class="text-xs font-bold text-white tracking-wide">${tier.name}</h5>
+                        <div class="mt-2 w-full glass-card bg-black/40 py-1.5 rounded-xl border border-khazana-gold/20 flex items-center justify-center gap-1.5">
+                            <img src="https://i.ibb.co/bMGmC8jk/file-000000003eb082088d42394e36b4e1cd.png" alt="Star Icon" class="w-4 h-4 object-contain" onerror="this.style.display='none'">
+                            <span class="text-xs font-black text-khazana-gold">${tier.cost}</span>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+
+        /* ========================================================================
+         === CASE REEL SLIDER ENGINE ===
+         ========================================================================
+        */
+
+        function openCaseModal(tier) {
+            activeSelectedTier = tier;
+            document.getElementById('modalTierTitle').innerText = tier.name;
+            document.getElementById('modalCaseCostText').innerText = tier.cost;
+            
+            const modal = document.getElementById('caseOpeningModal');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            
+            prepareReelStrip([]);
+
+            const guaranteedBtn = document.getElementById('guaranteedSpinBtn');
+            const guaranteedPrice = (currentUserState.guaranteedPrices || {})[tier.id];
+
+            if (guaranteedPrice == null) {
+                // No guaranteed-spin gifts configured for this tier yet (admin
+                // hasn't run /setguaranteed) — show disabled instead of letting
+                // the user tap it and hit a confusing backend error.
+                guaranteedBtn.disabled = true;
+                guaranteedBtn.classList.add('opacity-40');
+                document.getElementById('guaranteedBtnText').innerText = "Guaranteed Spin — not available";
+                document.getElementById('guaranteedTimerText').classList.add('hidden');
+            } else {
+                guaranteedBtn.classList.remove('opacity-40');
+                guaranteedBtn.dataset.price = guaranteedPrice;
+                // cooldown is per-tier now — look up THIS tier's remaining cooldown, not a global one
+                const remaining = (currentUserState.guaranteedCooldowns || {})[tier.id] || 0;
+                updateGuaranteedCooldownDisplay(remaining);
+            }
+        }
+
+        function closeCaseModal() {
+            if (isSpinning) return;
+            const modal = document.getElementById('caseOpeningModal');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        function prepareReelStrip(winningItem, pool = []) {
+            const track = document.getElementById('reelTrack');
+            track.style.transition = 'none';
+            track.style.transform = 'translateX(0px)';
+            track.innerHTML = '';
+
+            const samplePool = pool.length > 0 ? pool : [
+                { id: '1', name: 'Common Loot Coin Gift', rarity: 'common', img: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80' },
+                { id: '2', name: 'Rare Star Badge Gift', rarity: 'rare', img: 'https://images.unsplash.com/photo-1614680376593-902f749f7ec0?w=100&auto=format&fit=crop&q=80' },
+                { id: '3', name: 'Epic Neon Plane Gift', rarity: 'epic', img: 'https://images.unsplash.com/photo-1563089145-599997674d42?w=100&auto=format&fit=crop&q=80' },
+                { id: '4', name: 'Legendary Crown Gift', rarity: 'legendary', img: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=100&auto=format&fit=crop&q=80' }
+            ];
+
+            const totalStripItems = 60;
+            const winningTargetIndex = 48;
+
+            for (let i = 0; i < totalStripItems; i++) {
+                let itemData = (i === winningTargetIndex && winningItem) ? winningItem : samplePool[i % samplePool.length];
+
+                const itemCard = document.createElement('div');
+                itemCard.className = `flex-shrink-0 w-[80px] h-[95px] mx-1 rounded-xl glass-card flex flex-col items-center justify-center p-2 border-2 rarity-${itemData.rarity} relative overflow-hidden`;
+                itemCard.innerHTML = `
+                    <img src="${itemData.img}" class="w-10 h-10 object-contain mb-1">
+                    <span class="text-[9px] font-bold text-center text-slate-300 truncate w-full">${itemData.name}</span>
+                `;
+                track.appendChild(itemCard);
+            }
+        }
+
+        async function executeCaseSpin(isGuaranteed = false) {
+            if (isSpinning || !activeSelectedTier) return;
+            
+            const btn = document.getElementById('openCaseActionBtn');
+            btn.disabled = true;
+            btn.classList.add('opacity-50');
+
+            try {
+                const result = await apiFetchCaseResult(activeSelectedTier.id, isGuaranteed);
+                isSpinning = true;
+
+                document.getElementById('starsBalance').innerText = result.updatedStarsBalance;
+                if (isGuaranteed) updateGuaranteedCooldownDisplay(result.cooldownRemainingSec);
+
+                prepareReelStrip(result.winningItem, result.previewStripPool);
+
+                const track = document.getElementById('reelTrack');
+                const itemWidth = 80 + 8;
+                const viewportWidth = document.getElementById('reelViewport').offsetWidth;
+                
+                const targetIndex = 48;
+                const centerNeedleOffset = (targetIndex * itemWidth) - (viewportWidth / 2) + (itemWidth / 2);
+                
+                const jitterRNG = (Math.random() - 0.5) * 30; 
+                const finalTranslateX = -(centerNeedleOffset + jitterRNG);
+
+                requestAnimationFrame(() => {
+                    track.style.transition = 'transform 5.5s cubic-bezier(0.08, 0.82, 0.17, 0.99)';
+                    track.style.transform = `translateX(${finalTranslateX}px)`;
+                });
+
+                setTimeout(() => {
+                    showWinReveal(result.winningItem);
+                    isSpinning = false;
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50');
+                }, 5700);
+
+            } catch (err) {
+                // err.message already has a clear, specific reason (set inside
+                // apiFetchCaseResult above) — show that instead of a generic toast
+                // so it's obvious WHY a spin didn't happen (payment cancelled,
+                // insufficient stars, not inside Telegram, etc).
+                showToast(err.message || "Spin failed — see console for details");
+                console.error("Spin error:", err);
+                isSpinning = false;
+                btn.disabled = false;
+                btn.classList.remove('opacity-50');
+            }
+        }
+
+        function triggerGuaranteedSpin() {
+            const btn = document.getElementById('guaranteedSpinBtn');
+            if(!btn.classList.contains('locked')) {
+                showToast("Requesting Guaranteed Spin...");
+                executeCaseSpin(true);
+            } else {
+                 showToast("Guaranteed Spin is on Cooldown");
+            }
+        }
+
+        function updateGuaranteedCooldownDisplay(secondsRemaining) {
+            const btn = document.getElementById('guaranteedSpinBtn');
+            const btnText = document.getElementById('guaranteedBtnText');
+            const timerText = document.getElementById('guaranteedTimerText');
+            const price = btn.dataset.price;
+            const readyLabel = price ? `Guaranteed Spin — ⭐${price}` : "Guaranteed Spin Ready!";
+            
+            clearInterval(guaranteedCooldownInterval);
+
+            if (secondsRemaining > 0) {
+                btn.disabled = true;
+                btn.classList.add('opacity-70', 'locked');
+                timerText.classList.remove('hidden');
+                
+                function tick() {
+                    if (secondsRemaining <= 0) {
+                        clearInterval(guaranteedCooldownInterval);
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-70', 'locked');
+                        timerText.classList.add('hidden');
+                        btnText.innerText = readyLabel;
+                        return;
+                    }
+                    btnText.innerText = "Spin On Cooldown";
+                    const h = Math.floor(secondsRemaining / 3600);
+                    const m = Math.floor((secondsRemaining % 3600) / 60);
+                    const s = secondsRemaining % 60;
+                    timerText.innerText = `Cooldown: ${h}:${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+                    secondsRemaining--;
+                }
+                tick();
+                guaranteedCooldownInterval = setInterval(tick, 1000);
+            } else {
+                btn.disabled = false;
+                btn.classList.remove('opacity-70', 'locked');
+                timerText.classList.add('hidden');
+                btnText.innerText = readyLabel;
+            }
+        }
+
+        function showWinReveal(item) {
+            document.getElementById('winItemName').innerText = item.name;
+            document.getElementById('winItemRarity').innerText = item.rarity;
+            document.getElementById('winItemImg').src = item.img;
+            document.getElementById('winItemValueStars').innerText = item.valueStars;
+
+            const winModal = document.getElementById('winRevealModal');
+            winModal.classList.remove('opacity-0', 'pointer-events-none');
+        }
+
+        function closeWinReveal() {
+            const winModal = document.getElementById('winRevealModal');
+            winModal.classList.add('opacity-0', 'pointer-events-none');
+            closeCaseModal();
+        }
+
+
+        /* ==========================================================================
+         === TASKS & PROFILE RENDERERS ===
+         ==========================================================================
+        */
+
+        async function renderTasks() {
+            const tasks = await apiGetTasks();
+            const container = document.getElementById('taskList');
+            container.innerHTML = '';
+
+            if (tasks.length === 0) {
+                container.innerHTML = `<p class="text-xs text-slate-500 text-center py-4">No quests right now.</p>`;
+                return;
+            }
+
+            tasks.forEach(t => {
+                const card = document.createElement('div');
+                card.className = "glass-card p-3 rounded-xl flex items-center justify-between";
+                card.innerHTML = `
+                    <div>
+                        <h5 class="text-xs font-bold text-white text-wrap px-1 truncate w-[200px]">${t.title}</h5>
+                        <span class="text-[10px] text-khazana-gold font-bold flex items-center gap-1">
+                            <img src="https://i.ibb.co/qYr79X57/file-000000001478821184a7f5e58b7b80de.png" alt="Ticket" class="w-3 h-3">+${t.reward} Tickets
+                        </span>
+                    </div>
+                    <button onclick="handleTaskAction(this, '${t.actionUrl}')" ${t.done ? 'disabled' : ''} class="${t.done ? 'bg-slate-800 text-slate-500' : 'bg-khazana-tgBlue hover:bg-khazana-tgBlueHover text-white'} text-xs font-bold px-3 py-1.5 rounded-lg transition-all active:scale-95">
+                        ${t.done ? 'Done ✓' : 'Start'}
+                    </button>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function handleTaskAction(btn, url) {
+            if(url) window.open(url, '_blank');
+            btn.innerText = "Done ✓";
+            btn.className = "bg-slate-800 text-slate-500 text-xs font-bold px-3 py-1.5 rounded-lg";
+            btn.disabled = true;
+        }
+
+        async function renderProfileData() {
+            const history = await apiGetHistory();
+            const leaderboard = await apiGetLeaderboard();
+
+            // History
+            const histContainer = document.getElementById('historyList');
+            if(history.length === 0) {
+                histContainer.innerHTML = `<p class="text-xs text-slate-500 text-center py-4">No history yet.</p>`;
+            } else {
+                histContainer.innerHTML = history.map(h => `
+                    <div class="glass-card p-3 rounded-xl flex items-center justify-between text-xs overflow-hidden">
+                        <div>
+                            <h5 class="font-bold text-white text-nowrap truncate w-[180px]">${h.item}</h5>
+                            <span class="text-[10px] text-slate-400">${h.time} ago</span>
+                        </div>
+                        <span class="font-bold text-khazana-gold flex-shrink-0 flex items-center gap-1">
+                            <img src="https://i.ibb.co/bMGmC8jk/file-000000003eb082088d42394e36b4e1cd.png" alt="Star" class="w-3 h-3">⭐ ${h.cost}
+                        </span>
+                    </div>
+                `).join('');
+            }
+
+            // Leaderboard
+            const lbContainer = document.getElementById('leaderboardList');
+            if(leaderboard.length === 0) {
+                lbContainer.innerHTML = `<p class="text-xs text-slate-500 text-center py-4">No leaderboard data yet.</p>`;
+            } else {
+                lbContainer.innerHTML = leaderboard.map(l => `
+                    <div class="glass-card p-3 rounded-xl flex items-center justify-between text-xs overflow-hidden gap-1">
+                        <div class="flex items-center gap-3">
+                            <span class="font-black text-khazana-gold w-4">#${l.rank}</span>
+                            <div class="truncate">
+                                <h5 class="font-bold text-white text-nowrap truncate w-[150px]">${l.user}</h5>
+                                <span class="text-[10px] text-slate-400">${l.opened} Opened</span>
+                            </div>
+                        </div>
+                        <span class="font-bold text-slate-300 text-nowrap truncate w-[80px]">${l.best}</span>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function switchProfileSegment(sub) {
+            document.querySelectorAll('.seg-btn').forEach(b => {
+                b.classList.remove('bg-khazana-card', 'text-white');
+                b.classList.add('text-slate-400');
+            });
+
+            if (sub === 'history') {
+                document.getElementById('seg-history').classList.add('bg-khazana-card', 'text-white');
+                document.getElementById('subtab-history').classList.remove('hidden');
+                document.getElementById('subtab-leaderboard').classList.add('hidden');
+            } else {
+                document.getElementById('seg-leaderboard').classList.add('bg-khazana-card', 'text-white');
+                document.getElementById('subtab-leaderboard').classList.remove('hidden');
+                document.getElementById('subtab-history').classList.add('hidden');
+            }
+        }
+
+
+        /* ==========================================================================
+         === ADMIN AUTHENTICATION & CONTROL ===
+         ==========================================================================
+        */
+
+        function openAdminAuthModal() {
+            const modal = document.getElementById('adminAuthModal');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+        }
+
+        function closeAdminAuthModal() {
+            const modal = document.getElementById('adminAuthModal');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            document.getElementById('adminPassInput').value = '';
+        }
+
+        async function handleAdminAuthSubmit(e) {
+            e.preventDefault();
+            const pass = document.getElementById('adminPassInput').value;
+            const verified = await apiAdminVerifyPass(pass);
+            
+            if (verified) {
+                closeAdminAuthModal();
+                openAdminPanel();
+            } else {
+                showToast("Invalid Admin Password");
+            }
+        }
+
+        async function openAdminPanel() {
+            const panel = document.getElementById('adminPanelModal');
+            panel.classList.remove('hidden');
+            await renderAdminDashboard();
+        }
+
+        function exitAdminPanel() {
+            document.getElementById('adminPanelModal').classList.add('hidden');
+        }
+
+        async function renderAdminDashboard() {
+            const stats = await apiAdminGetAnalytics();
+            const grid = document.getElementById('adminAnalyticsGrid');
+            grid.innerHTML = `
+                <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800"><span class="text-[10px] text-slate-400">Total Opened</span><p class="text-sm font-bold text-white">${stats.totalOpened}</p></div>
+                <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800"><span class="text-[10px] text-slate-400">Stars Spent</span><p class="text-sm font-bold text-khazana-gold flex items-center gap-1"><img src="https://i.ibb.co/bMGmC8jk/file-000000003eb082088d42394e36b4e1cd.png" class="w-3 h-3">⭐ ${stats.totalStarsSpent}</p></div>
+                <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800"><span class="text-[10px] text-slate-400">Active Users</span><p class="text-sm font-bold text-white">${stats.activeUsers}</p></div>
+                <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800"><span class="text-[10px] text-slate-400">Gifts Awarded</span><p class="text-sm font-bold text-emerald-400">${stats.totalGiftsAwarded}</p></div>
+            `;
+
+            const tiers = await apiGetLootTiers();
+            const tbody = document.getElementById('adminTierTableBody');
+            tbody.innerHTML = tiers.map(t => `
+                <tr class="border-b border-slate-800 text-slate-300">
+                    <td class="p-2 font-bold">${t.name}</td>
+                    <td class="p-2 text-nowrap flex items-center gap-1"><img src="https://i.ibb.co/bMGmC8jk/file-000000003eb082088d42394e36b4e1cd.png" class="w-3.5 h-3.5">⭐ ${t.cost}</td>
+                    <td class="p-2 truncate max-w-[100px]">${t.imgUrl}</td>
+                    <td class="p-2 flex gap-1">
+                        <button onclick="showToast('Box Edit Triggered')" class="bg-slate-800 px-2 py-1 rounded text-[10px] font-bold active:scale-95">Edit</button>
+                        <button onclick="handleAdminDeleteTier('${t.id}')" class="bg-red-900/60 text-red-300 px-2 py-1 rounded text-[10px] font-bold active:scale-95">Del</button>
+                    </td>
+                </tr>
+            `).join('');
+
+            // Populate the odds-editor tier dropdown and gifts table
+            const select = document.getElementById('oddsTierSelect');
+            select.innerHTML = tiers.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+            if (tiers.length) await renderOddsEditor(tiers[0].id);
+
+            await renderAdminGiftsTable();
+        }
+
+        /* ---------- GIFTS LIBRARY TABLE (fills the gap: saved gifts weren't shown anywhere) ---------- */
+        async function renderAdminGiftsTable() {
+            const gifts = await apiAdminGetGifts();
+            const tbody = document.getElementById('adminGiftsTableBody');
+            if (!gifts.length) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-3 text-center text-slate-500">No gifts saved yet — add one above.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = gifts.map(g => `
+                <tr class="border-b border-slate-800 text-slate-300">
+                    <td class="p-2"><img src="${g.img}" class="w-8 h-8 object-contain rounded bg-slate-950"></td>
+                    <td class="p-2 font-bold">${g.name}</td>
+                    <td class="p-2">⭐ ${g.valueStars}</td>
+                    <td class="p-2 capitalize">${g.rarity}</td>
+                    <td class="p-2 flex gap-1">
+                        <button onclick="showToast('Edit not wired yet')" class="bg-slate-800 px-2 py-1 rounded text-[10px] font-bold active:scale-95">Edit</button>
+                        <button onclick="handleAdminDeleteGift('${g.id}')" class="bg-red-900/60 text-red-300 px-2 py-1 rounded text-[10px] font-bold active:scale-95">Del</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function handleAdminDeleteGift(giftId) {
+            await apiAdminDeleteGift(giftId);
+            showToast("Gift deleted");
+            await renderAdminGiftsTable();
+        }
+
+        /* ---------- ODDS / OUTCOME EDITOR (was completely missing) ---------- */
+        let currentOddsTierId = null;
+        let currentOddsRows = [];
+
+        async function renderOddsEditor(tierId) {
+            currentOddsTierId = tierId;
+            currentOddsRows = await apiAdminGetTierOdds(tierId);
+            drawOddsRows();
+        }
+
+        function drawOddsRows() {
+            const body = document.getElementById('oddsEditorBody');
+            if (!currentOddsRows.length) {
+                body.innerHTML = `<p class="text-[11px] text-slate-500 py-2">No outcomes configured for this tier yet. Tap "+ Add Outcome".</p>`;
+            } else {
+                body.innerHTML = currentOddsRows.map((row, i) => `
+                    <div class="flex items-center gap-1.5 bg-slate-950 p-1.5 rounded border border-slate-800">
+                        <select onchange="updateOddsRow(${i}, 'type', this.value)" class="bg-slate-900 text-[10px] text-white p-1 rounded border border-slate-800">
+                            <option value="ticket" ${row.type==='ticket'?'selected':''}>Ticket</option>
+                            <option value="gift" ${row.type==='gift'?'selected':''}>Gift</option>
+                        </select>
+                        ${row.type === 'ticket'
+                            ? `<input type="number" placeholder="Ticket amt" value="${row.ticketAmount||''}" oninput="updateOddsRow(${i},'ticketAmount',this.value)" class="w-20 bg-slate-900 text-[10px] text-white p-1 rounded border border-slate-800">`
+                            : `<input type="text" placeholder="Gift name/id" value="${row.giftId||''}" oninput="updateOddsRow(${i},'giftId',this.value)" class="w-28 bg-slate-900 text-[10px] text-white p-1 rounded border border-slate-800">`
+                        }
+                        <input type="number" placeholder="%" value="${row.probability||''}" oninput="updateOddsRow(${i},'probability',this.value)" class="w-16 bg-slate-900 text-[10px] text-white p-1 rounded border border-slate-800">
+                        <span class="text-[10px] text-slate-500">%</span>
+                        <button onclick="removeOddsRow(${i})" class="ml-auto text-red-400 text-[10px] font-bold px-1">✕</button>
+                    </div>
+                `).join('');
+            }
+            const total = currentOddsRows.reduce((sum, r) => sum + (parseFloat(r.probability) || 0), 0);
+            const label = document.getElementById('oddsTotalLabel');
+            label.innerText = `Total: ${total}%`;
+            label.className = total === 100 ? "font-bold text-emerald-400" : "font-bold text-red-400";
+        }
+
+        function updateOddsRow(i, field, value) {
+            currentOddsRows[i][field] = value;
+            if (field === 'probability' || field === 'type') drawOddsRows();
+        }
+        function handleAddOddsRow() {
+            currentOddsRows.push({ type: 'ticket', ticketAmount: 1, probability: 0 });
+            drawOddsRows();
+        }
+        function removeOddsRow(i) {
+            currentOddsRows.splice(i, 1);
+            drawOddsRows();
+        }
+        async function handleSaveOdds() {
+            const total = currentOddsRows.reduce((sum, r) => sum + (parseFloat(r.probability) || 0), 0);
+            if (total !== 100) {
+                showToast(`Odds must total 100% (currently ${total}%)`);
+                return;
+            }
+            await apiAdminUpdateTierOdds(currentOddsTierId, currentOddsRows);
+            showToast("Odds table saved");
+        }
+        async function handleSaveGuaranteedConfig() {
+            const eligible = document.getElementById('guaranteedEligibleInput').value.split(',').map(s=>s.trim()).filter(Boolean);
+            const cooldown = document.getElementById('guaranteedCooldownInput').value;
+            await apiAdminSaveGuaranteedConfig(currentOddsTierId, { eligibleGifts: eligible, cooldownHours: cooldown });
+            showToast("Guaranteed spin config saved");
+        }
+
+        /* ---------- TIER ADD/DELETE (was missing) ---------- */
+        async function handleAdminAddTier() {
+            const name = prompt("New tier name (e.g. '50⭐ Kraken Hoard'):");
+            if (!name) return;
+            const cost = prompt("Entry price in Stars:");
+            if (!cost) return;
+            await apiAdminCreateTier({ name, cost: Number(cost) });
+            showToast("Tier created");
+            await renderAdminDashboard();
+        }
+        async function handleAdminDeleteTier(tierId) {
+            if (!confirm("Delete this tier? This cannot be undone.")) return;
+            await apiAdminDeleteTier(tierId);
+            showToast("Tier deleted");
+            await renderAdminDashboard();
+        }
+
+        async function handleAdminSaveGift(e) {
+            e.preventDefault();
+            const name = document.getElementById('adminGiftName').value;
+            const valueStars = document.getElementById('adminGiftStars').value;
+            const rarity = document.getElementById('adminGiftRarity').value;
+            const img = document.getElementById('adminGiftImgUrl').value;
+
+            await apiAdminSaveGift({ name, valueStars, rarity, img });
+            showToast("Gift Item Saved!");
+
+            document.getElementById('adminGiftName').value = '';
+            document.getElementById('adminGiftStars').value = '';
+            document.getElementById('adminGiftImgUrl').value = '';
+        }
+
+        async function handleAdminSaveTask(e) {
+            e.preventDefault();
+            const title = document.getElementById('adminTaskTitle').value;
+            const reward = document.getElementById('adminTaskReward').value;
+            const url = document.getElementById('adminTaskUrl').value;
+            
+            await apiAdminSaveTask({ title, reward, url });
+            showToast("Task Saved!");
+            
+            document.getElementById('adminTaskTitle').value = '';
+            document.getElementById('adminTaskReward').value = '';
+            document.getElementById('adminTaskUrl').value = '';
+        }
+
+        async function handleAdminSearchUser() {
+            const query = document.getElementById('adminUserSearchInput').value;
+            const res = await apiAdminSearchUser(query);
+            const box = document.getElementById('adminUserSearchResult');
+            box.classList.remove('hidden');
+            box.innerHTML = `
+                <div class="flex flex-col gap-1.5 overflow-hidden">
+                    <span class="truncate">Found User: ${res.username} (${res.userId})</span>
+                    <span class="text-xs">Balance: ⭐ ${res.totalBalance} Stars</span>
+                    <span class="text-xs text-nowrap flex items-center gap-1">Tickets: <img src="https://i.ibb.co/qYr79X57/file-000000001478821184a7f5e58b7b80de.png" class="w-3.5 h-3.5"> ${res.totalTickets}</span>
+                    <div class="flex gap-2 mt-2">
+                        <button onclick="showToast('Edit Tickets')" class="bg-khazana-common/20 text-white font-bold px-2 py-1 rounded text-[10px] active:scale-95">Edit Tickets</button>
+                        <button onclick="showToast('Edit Stars')" class="bg-khazana-gold/20 text-black font-bold px-2 py-1 rounded text-[10px] active:scale-95">Edit Stars</button>
+                        <button onclick="showToast('Ban User')" class="bg-red-600 text-white font-bold px-2 py-1 rounded text-[10px] flex-shrink-0 active:scale-95">Ban User</button>
+                    </div>
+                </div>
+            `;
+        }
+
+
+        /* ==========================================================================
+         === UTILITIES & NAVIGATION ===
+         ==========================================================================
+        */
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(tabId).classList.remove('hidden');
+
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('text-khazana-gold');
+                btn.classList.add('text-slate-400');
+            });
+
+            const activeNav = document.getElementById(`nav-${tabId}`);
+            if(activeNav) {
+                activeNav.classList.remove('text-slate-400');
+                activeNav.classList.add('text-khazana-gold');
+            }
+        }
+
+        function triggerStarsPurchase() {
+            showToast("Invoking Telegram Stars Payment");
+        }
+
+        async function handleConvertTickets() {
+            const res = await apiConvertTicketsToStarsUI();
+            if (res.success) {
+                document.getElementById('starsBalance').innerText = res.updatedStarsBalance;
+                document.getElementById('ticketBalance').innerText = res.updatedTicketsBalance;
+                showToast("Converted to Stars!");
+            } else {
+                showToast(res.message || "Not enough tickets (need 10)");
+            }
+        }
+
+        function shareInviteLink() {
+            const url = `https://t.me/share/url?url=https://t.me/KhazanaBot?start=ref_${currentUserState.userId}&text=Open%20treasure%20loot%20boxes%20on%20Khazana!`;
+            if (window.Telegram?.WebApp) {
+                window.Telegram.WebApp.openTelegramLink(url);
+            } else {
+                window.open(url, '_blank');
+            }
+        }
+
+        function copyInviteLink() {
+            navigator.clipboard.writeText(`https://t.me/KhazanaBot?start=ref_${currentUserState.userId}`);
+            showToast("Referral Link Copied");
+        }
+
+        function toggleLanguage() {
+            currentLang = currentLang === 'EN' ? 'RU' : 'EN';
+            document.getElementById('langBtn').innerText = currentLang;
+            showToast(`Language switched to ${currentLang}`);
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = msg;
+            toast.classList.remove('opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'pointer-events-none');
+            }, 2200);
+        }
+
+        function getFallbackBoxSvg(cost) {
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="15" y="35" width="70" height="50" rx="8" fill="#1A1D26" stroke="#FFC837" stroke-width="3"/><path d="M10 35 L50 15 L90 35 L50 50 Z" fill="#FFC837" opacity="0.8"/><circle cx="50" cy="60" r="8" fill="#FF8008"/><text x="50" y="64" font-size="10" font-weight="bold" fill="black" text-anchor="middle">${cost}</text></svg>`;
+            return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+        }
+        // Safer error handler — avoids inlining a quote-containing data URI into an
+        // HTML attribute string, which was corrupting the DOM before.
+        function handleImgError(imgEl) {
+            imgEl.onerror = null; // prevent loop if fallback itself fails
+            const cost = imgEl.getAttribute('data-fallback-cost') || '?';
+            imgEl.src = getFallbackBoxSvg(cost);
+        }
+    </script>
+</body>
+</html>
+
